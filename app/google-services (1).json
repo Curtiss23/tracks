@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "999695404078",
+    "project_id": "music-distribution-254fd",
+    "storage_bucket": "music-distribution-254fd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:999695404078:android:96c47fffc73e52001463bf",
+        "android_client_info": {
+          "package_name": "com.Curtis.music"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAAMKY7LEVBghLIH4ZSb6C3ynl565vaVQg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
