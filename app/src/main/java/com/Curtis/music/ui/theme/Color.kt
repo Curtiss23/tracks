@@ -19,3 +19,13 @@ val ElectricPurple = Color(0xFF9D00FF)
 val AcidYellow = Color(0xFFEFFF00)
 val HotOrange = Color(0xFFFF6F00)
 val AvantGradient = Brush.linearGradient(listOf(NeonPink, NeonBlue, NeonGreen, ElectricPurple))
+
+val PremiumPurple = Color(0xFF6C2EB7)
+val PremiumGold = Color(0xFFFFD700)
+val PremiumDark = Color(0xFF18181B)
+val PremiumGradient = Brush.linearGradient(listOf(PremiumPurple, PremiumGold, DeepBlack))
+
+val TrueBlack = Color(0xFF121212)
+val HighContrastWhite = Color(0xFFFFFFFF)
+val AccentBlue = Color(0xFF00BFFF)
+val AccentPurple = Color(0xFF8A2BE2)

@@ -73,5 +73,7 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.messaging)
     implementation(libs.activity.ktx)
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.material.icons.extended)
 }
+
+apply(plugin = "com.google.gms.google-services")

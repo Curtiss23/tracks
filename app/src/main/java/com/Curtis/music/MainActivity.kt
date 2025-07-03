@@ -87,18 +87,39 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.storage.FirebaseStorage
+import android.content.SharedPreferences
+import androidx.compose.material3.TextButton
+import com.Curtis.music.ui.theme.AccentBlue
+import com.Curtis.music.ui.theme.AccentPurple
+import com.Curtis.music.ui.theme.HighContrastWhite
+import com.Curtis.music.ui.theme.PremiumGradient
+import com.Curtis.music.ui.theme.PremiumGold
+import com.Curtis.music.ui.theme.PremiumDark
+import com.Curtis.music.ui.theme.TrueBlack
+import com.google.firebase.FirebaseApp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FirebaseApp.initializeApp(this)
         enableEdgeToEdge()
         val viewModel = PlayerViewModel()
         viewModel.getFcmToken()
+        val prefs = getSharedPreferences("avant_garde_prefs", Context.MODE_PRIVATE)
+        val isOnboardingComplete = prefs.getBoolean("onboarding_complete", false)
         setContent {
             MusicTheme {
                 val navController = rememberNavController()
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MusicAppNavigation(navController = navController, viewModel = viewModel)
+                var showOnboarding by remember { mutableStateOf(!isOnboardingComplete) }
+                if (showOnboarding) {
+                    OnboardingScreen(onContinue = {
+                        prefs.edit().putBoolean("onboarding_complete", true).apply()
+                        showOnboarding = false
+                    })
+                } else {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        MusicAppNavigation(navController = navController, viewModel = viewModel)
+                    }
                 }
             }
         }
@@ -138,6 +159,7 @@ class PlayerViewModel : ViewModel() {
     var isUploading by mutableStateOf(false)
     var uploadError by mutableStateOf<String?>(null)
     private val analytics = Firebase.analytics
+    var isPremium by mutableStateOf(false)
 
     val currentUserEmail: String?
         get() = auth.currentUser?.email
@@ -147,7 +169,7 @@ class PlayerViewModel : ViewModel() {
             exoPlayer = ExoPlayer.Builder(context).build().apply {
                 addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying_: Boolean) {
-                        isPlaying = isPlaying_
+                        this@PlayerViewModel.isPlaying = isPlaying_
                     }
                 })
             }
@@ -290,11 +312,17 @@ class PlayerViewModel : ViewModel() {
     }
 
     fun getSongById(id: String?): Song? = songs.find { it.id == id }
+
+    fun signOut() {
+        auth.signOut()
+        isLoggedIn = false
+    }
 }
 
 // --- Navigation ---
 @Composable
 fun MusicAppNavigation(navController: NavHostController, viewModel: PlayerViewModel = PlayerViewModel()) {
+    var isDarkTheme by remember { mutableStateOf(false) }
     if (!viewModel.isLoggedIn) {
         LoginScreen(
             onLogin = { email, password -> viewModel.login(email, password) },
@@ -348,14 +376,41 @@ fun MusicAppNavigation(navController: NavHostController, viewModel: PlayerViewMo
                 PlaylistsScreen(
                     playlists = viewModel.playlists,
                     onAddPlaylist = { name -> viewModel.addPlaylist(name) },
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    isPremium = viewModel.isPremium,
+                    onGoPremium = { navController.navigate("goPremium") }
                 )
             }
             composable("profile") {
-                ProfileScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+                ProfileScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                    onGoPremium = { navController.navigate("goPremium") },
+                    onSettings = { navController.navigate("settings") },
+                    onDistributeMusic = { navController.navigate("distributeMusic") }
+                )
             }
             composable("feed") {
                 FeedScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+            }
+            composable("goPremium") {
+                GoPremiumScreen(
+                    onUpgrade = {
+                        viewModel.isPremium = true
+                        navController.popBackStack()
+                    },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("settings") {
+                SettingsScreen(
+                    isDarkTheme = isDarkTheme,
+                    onThemeToggle = { isDarkTheme = !isDarkTheme },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("distributeMusic") {
+                DistributeMusicScreen(onBack = { navController.popBackStack() })
             }
         }
     }
@@ -512,7 +567,7 @@ fun MusicLibraryScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Your Avant-Garde Library",
+                    text = "Your ProBeat Library",
                     style = MaterialTheme.typography.displayLarge,
                     color = AcidYellow,
                     modifier = Modifier.padding(start = 16.dp)
@@ -690,6 +745,7 @@ fun LoginScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var isLoginMode by remember { mutableStateOf(true) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -698,7 +754,7 @@ fun LoginScreen(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "Avant-Garde Music Login",
+                text = if (isLoginMode) "ProBeat Login" else "Register for ProBeat",
                 style = MaterialTheme.typography.displayLarge,
                 color = NeonPink
             )
@@ -736,18 +792,27 @@ fun LoginScreen(
                 CircularProgressIndicator(color = NeonGreen)
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            Button(
-                onClick = { onLogin(email, password) },
-                colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = DeepBlack)
-            ) {
-                Text("Login")
+            if (isLoginMode) {
+                Button(
+                    onClick = { onLogin(email, password) },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = DeepBlack)
+                ) {
+                    Text("Login")
+                }
+            } else {
+                Button(
+                    onClick = { onRegister(email, password) },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)
+                ) {
+                    Text("Register")
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { onRegister(email, password) },
-                colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)
-            ) {
-                Text("Register")
+            TextButton(onClick = { isLoginMode = !isLoginMode }) {
+                Text(
+                    if (isLoginMode) "Don't have an account? Register here" else "Already have an account? Login here",
+                    color = NeonGreen
+                )
             }
         }
     }
@@ -757,8 +822,33 @@ fun LoginScreen(
 fun PlaylistsScreen(
     playlists: List<Playlist>,
     onAddPlaylist: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isPremium: Boolean = false,
+    onGoPremium: () -> Unit = {}
 ) {
+    if (!isPremium) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(PremiumGradient),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Premium Feature", style = MaterialTheme.typography.displayLarge, color = PremiumGold)
+                Spacer(modifier = Modifier.height(24.dp))
+                Text("Playlists are available for premium users only.", color = Color.White)
+                Spacer(modifier = Modifier.height(32.dp))
+                Button(onClick = onGoPremium, colors = ButtonDefaults.buttonColors(containerColor = PremiumGold, contentColor = PremiumDark)) {
+                    Text("Go Premium")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)) {
+                    Text("Back")
+                }
+            }
+        }
+        return
+    }
     var newPlaylistName by remember { mutableStateOf("") }
     Box(
         modifier = Modifier
@@ -823,7 +913,7 @@ fun PlaylistsScreen(
 }
 
 @Composable
-fun ProfileScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
+fun ProfileScreen(viewModel: PlayerViewModel, onBack: () -> Unit, onGoPremium: () -> Unit = {}, onSettings: () -> Unit = {}, onDistributeMusic: () -> Unit = {}) {
     val email = viewModel.currentUserEmail ?: "Unknown"
     var userSongs by remember { mutableStateOf<List<Song>>(emptyList()) }
     LaunchedEffect(Unit) {
@@ -838,7 +928,13 @@ fun ProfileScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Profile", style = MaterialTheme.typography.displayLarge, color = NeonPink)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Profile", style = MaterialTheme.typography.displayLarge, color = NeonPink)
+            if (viewModel.isPremium) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("★ Premium", color = PremiumGold, style = MaterialTheme.typography.headlineMedium)
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
         Text("Email: $email", color = AcidYellow)
         Spacer(modifier = Modifier.height(32.dp))
@@ -850,6 +946,24 @@ fun ProfileScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(32.dp))
         Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = DeepBlack)) {
             Text("Back")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = { viewModel.signOut() }, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)) {
+            Text("Sign Out")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        if (!viewModel.isPremium) {
+            Button(onClick = onGoPremium, colors = ButtonDefaults.buttonColors(containerColor = PremiumGold, contentColor = PremiumDark)) {
+                Text("Go Premium")
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onSettings, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)) {
+            Text("Settings")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onDistributeMusic, colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = HighContrastWhite)) {
+            Text("Distribute Your Music")
         }
     }
 }
@@ -924,6 +1038,129 @@ fun PreviewMusicLibraryScreen() {
             onFeedClick = {},
             viewModel = fakeViewModel
         )
+    }
+}
+
+@Composable
+fun OnboardingScreen(onContinue: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(PremiumGradient),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Welcome to ProBeat!", style = MaterialTheme.typography.displayLarge, color = PremiumGold)
+            Spacer(modifier = Modifier.height(24.dp))
+            Text("Experience premium features:", color = NeonGreen, style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("• Premium sound quality\n• Exclusive playlists\n• Personalized recommendations\n• And more!", color = Color.White)
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(onClick = onContinue, colors = ButtonDefaults.buttonColors(containerColor = PremiumGold, contentColor = PremiumDark)) {
+                Text("Get Started")
+            }
+        }
+    }
+}
+
+@Composable
+fun GoPremiumScreen(onUpgrade: () -> Unit, onBack: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(PremiumGradient),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Go Premium!", style = MaterialTheme.typography.displayLarge, color = PremiumGold)
+            Spacer(modifier = Modifier.height(24.dp))
+            Text("Unlock all features:", color = NeonGreen, style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("• Premium sound quality\n• Exclusive playlists\n• Personalized recommendations\n• Early access to new features!", color = Color.White)
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(onClick = onUpgrade, colors = ButtonDefaults.buttonColors(containerColor = PremiumGold, contentColor = PremiumDark)) {
+                Text("Upgrade Now")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)) {
+                Text("Back")
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(isDarkTheme: Boolean, onThemeToggle: () -> Unit, onBack: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(PremiumGradient),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Settings", style = MaterialTheme.typography.displayLarge, color = PremiumGold)
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Dark Theme", color = Color.White)
+                Spacer(modifier = Modifier.width(16.dp))
+                Button(onClick = onThemeToggle, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)) {
+                    Text(if (isDarkTheme) "Disable" else "Enable")
+                }
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)) {
+                Text("Back")
+            }
+        }
+    }
+}
+
+@Composable
+fun DistributeMusicScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var selectedSongUri by remember { mutableStateOf<Uri?>(null) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        selectedSongUri = uri
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Distribute Your Music", style = MaterialTheme.typography.displayLarge, color = AccentBlue)
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = { launcher.launch("audio/*") }, colors = ButtonDefaults.buttonColors(containerColor = AccentPurple, contentColor = HighContrastWhite)) {
+                Text("Select Song to Distribute")
+            }
+            selectedSongUri?.let {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Selected: ${it.lastPathSegment}", color = HighContrastWhite)
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+            Text("Choose a distributor:", color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(16.dp))
+            DistributorLink("DistroKid", "https://distrokid.com/")
+            DistributorLink("TuneCore", "https://www.tunecore.com/")
+            DistributorLink("CD Baby", "https://cdbaby.com/")
+            DistributorLink("Amuse", "https://www.amuse.io/")
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = HighContrastWhite)) {
+                Text("Back")
+            }
+        }
+    }
+}
+
+@Composable
+fun DistributorLink(name: String, url: String) {
+    val context = LocalContext.current
+    TextButton(onClick = {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        context.startActivity(intent)
+    }) {
+        Text(name, color = AccentBlue)
     }
 }
 

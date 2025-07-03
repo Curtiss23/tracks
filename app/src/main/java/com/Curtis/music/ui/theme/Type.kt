@@ -9,33 +9,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // Example: Use a bold, geometric sans-serif font if available, else default
-val AvantGardeFont = FontFamily.Default // Replace with custom font if added
+val PremiumFont = FontFamily.Default // Replace with custom font if added
 
 // Set of Material typography styles to start with
 val Typography = Typography(
     displayLarge = TextStyle(
-        fontFamily = AvantGardeFont,
-        fontWeight = FontWeight.Black,
-        fontSize = 40.sp,
-        letterSpacing = 2.sp
+        fontFamily = PremiumFont,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 44.sp,
+        letterSpacing = 2.sp,
+        color = HighContrastWhite
     ),
     headlineMedium = TextStyle(
-        fontFamily = AvantGardeFont,
+        fontFamily = PremiumFont,
         fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        letterSpacing = 1.sp
+        fontSize = 30.sp,
+        letterSpacing = 1.sp,
+        color = HighContrastWhite
     ),
     bodyLarge = TextStyle(
-        fontFamily = AvantGardeFont,
+        fontFamily = PremiumFont,
         fontWeight = FontWeight.Medium,
-        fontSize = 18.sp,
-        letterSpacing = 0.5.sp
+        fontSize = 20.sp,
+        letterSpacing = 0.5.sp,
+        color = HighContrastWhite
     ),
     bodyMedium = TextStyle(
-        fontFamily = AvantGardeFont,
+        fontFamily = PremiumFont,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
-        letterSpacing = 0.5.sp
+        letterSpacing = 0.5.sp,
+        color = HighContrastWhite
     )
     /* Other default text styles to override
     titleLarge = TextStyle(
