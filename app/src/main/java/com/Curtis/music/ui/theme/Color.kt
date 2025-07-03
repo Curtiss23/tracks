@@ -25,7 +25,5 @@ val PremiumGold = Color(0xFFFFD700)
 val PremiumDark = Color(0xFF18181B)
 val PremiumGradient = Brush.linearGradient(listOf(PremiumPurple, PremiumGold, DeepBlack))
 
-val TrueBlack = Color(0xFF121212)
+val TrueBlack = Color(0xFF000000)
 val HighContrastWhite = Color(0xFFFFFFFF)
-val AccentBlue = Color(0xFF00BFFF)
-val AccentPurple = Color(0xFF8A2BE2)

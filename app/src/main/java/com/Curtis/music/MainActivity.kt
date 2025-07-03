@@ -88,15 +88,19 @@ import com.google.firebase.ktx.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.storage.FirebaseStorage
 import android.content.SharedPreferences
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.TextButton
-import com.Curtis.music.ui.theme.AccentBlue
-import com.Curtis.music.ui.theme.AccentPurple
+import com.Curtis.music.ui.theme.PremiumGradient
+import com.Curtis.music.ui.theme.PremiumDark
 import com.Curtis.music.ui.theme.HighContrastWhite
 import com.Curtis.music.ui.theme.PremiumGradient
 import com.Curtis.music.ui.theme.PremiumGold
 import com.Curtis.music.ui.theme.PremiumDark
 import com.Curtis.music.ui.theme.TrueBlack
 import com.google.firebase.FirebaseApp
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.mutableStateListOf
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -137,6 +141,12 @@ data class Song(
 
 data class Playlist(val name: String, val songs: List<Song>)
 
+data class SongAnalytics(
+    val plays: Int = 0,
+    val likes: Int = 0,
+    val shares: Int = 0
+)
+
 // --- Placeholder ViewModel ---
 class PlayerViewModel : ViewModel() {
     var songs by mutableStateOf(
@@ -160,6 +170,9 @@ class PlayerViewModel : ViewModel() {
     var uploadError by mutableStateOf<String?>(null)
     private val analytics = Firebase.analytics
     var isPremium by mutableStateOf(false)
+    var artistBio by mutableStateOf<String?>(null)
+    var artistLinks by mutableStateOf<String?>(null)
+    var songAnalytics by mutableStateOf(mutableMapOf<Song, SongAnalytics>())
 
     val currentUserEmail: String?
         get() = auth.currentUser?.email
@@ -386,8 +399,15 @@ fun MusicAppNavigation(navController: NavHostController, viewModel: PlayerViewMo
                     viewModel = viewModel,
                     onBack = { navController.popBackStack() },
                     onGoPremium = { navController.navigate("goPremium") },
-                    onSettings = { navController.navigate("settings") },
-                    onDistributeMusic = { navController.navigate("distributeMusic") }
+                    onSettings = { navController.navigate("settingsProfile") },
+                    onDistributeMusic = { navController.navigate("distributeMusic") },
+                    onDiscover = { navController.navigate("discover") },
+                    onFeed = { navController.navigate("feed") },
+                    onPlaylists = { navController.navigate("playlists") },
+                    onNotifications = { navController.navigate("notifications") },
+                    onMessaging = { navController.navigate("messaging") },
+                    onUploadHistory = { navController.navigate("uploadHistory") },
+                    onLeaderboard = { navController.navigate("leaderboard") }
                 )
             }
             composable("feed") {
@@ -412,6 +432,30 @@ fun MusicAppNavigation(navController: NavHostController, viewModel: PlayerViewMo
             composable("distributeMusic") {
                 DistributeMusicScreen(onBack = { navController.popBackStack() })
             }
+            composable("artistProfile") {
+                ArtistProfileScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+            }
+            composable("songAnalytics") {
+                SongAnalyticsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+            }
+            composable("discover") {
+                DiscoverScreen(onBack = { navController.popBackStack() })
+            }
+            composable("notifications") {
+                NotificationsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("messaging") {
+                MessagingScreen(onBack = { navController.popBackStack() })
+            }
+            composable("settingsProfile") {
+                SettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("uploadHistory") {
+                UploadHistoryScreen(onBack = { navController.popBackStack() })
+            }
+            composable("leaderboard") {
+                LeaderboardScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }
@@ -434,7 +478,7 @@ fun MusicPlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(AvantGradient)
+            .background(TrueBlack)
     ) {
         Column(
             modifier = Modifier
@@ -558,7 +602,7 @@ fun MusicLibraryScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(AvantGradient)
+                .background(TrueBlack)
                 .padding(padding)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
@@ -601,7 +645,7 @@ fun MusicLibraryScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(displaySongs.size) { idx ->
-                    SongListItem(song = displaySongs[idx], onClick = { onSongClick(displaySongs[idx]) })
+                    SongListItem(song = displaySongs[idx], onClick = { onSongClick(displaySongs[idx]) }, onLike = {}, onComment = {})
                 }
             }
         }
@@ -609,31 +653,38 @@ fun MusicLibraryScreen(
 }
 
 @Composable
-fun SongListItem(song: Song, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
+fun SongListItem(song: Song, onClick: () -> Unit, onLike: () -> Unit, onComment: (String) -> Unit) {
+    var comment by remember { mutableStateOf("") }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = ElectricPurple)
+            .background(TrueBlack)
+            .padding(16.dp)
+            .clickable { onClick() },
+        horizontalAlignment = Alignment.Start
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AsyncImage(
-                model = song.albumArtUrl,
-                contentDescription = "Album art",
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(CircleShape)
-                    .background(NeonBlue),
-                contentScale = ContentScale.Crop
+        Text(song.title, style = MaterialTheme.typography.headlineMedium)
+        Text("by ${song.artist}", color = HighContrastWhite)
+        Row {
+            Button(onClick = onLike, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+                Text("Like")
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { comment = it },
+                label = { Text("Comment") },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = HighContrastWhite,
+                    unfocusedBorderColor = HighContrastWhite,
+                    cursorColor = HighContrastWhite
+                ),
+                textStyle = LocalTextStyle.current.copy(color = HighContrastWhite),
+                modifier = Modifier.width(200.dp)
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(text = song.title, style = MaterialTheme.typography.headlineMedium, color = NeonPink)
-                Text(text = song.artist, style = MaterialTheme.typography.bodyLarge, color = AcidYellow)
+            Button(onClick = { onComment(comment); comment = "" }, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+                Text("Post")
             }
         }
     }
@@ -655,7 +706,7 @@ fun UploadScreen(onUploadComplete: () -> Unit, viewModel: PlayerViewModel) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(AvantGradient),
+            .background(TrueBlack),
         contentAlignment = Alignment.Center
     ) {
         if (uploaded) {
@@ -749,7 +800,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(AvantGradient),
+            .background(TrueBlack),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -853,7 +904,7 @@ fun PlaylistsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(AvantGradient),
+            .background(TrueBlack),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -913,7 +964,20 @@ fun PlaylistsScreen(
 }
 
 @Composable
-fun ProfileScreen(viewModel: PlayerViewModel, onBack: () -> Unit, onGoPremium: () -> Unit = {}, onSettings: () -> Unit = {}, onDistributeMusic: () -> Unit = {}) {
+fun ProfileScreen(
+    viewModel: PlayerViewModel,
+    onBack: () -> Unit,
+    onGoPremium: () -> Unit = {},
+    onSettings: () -> Unit = {},
+    onDistributeMusic: () -> Unit = {},
+    onDiscover: () -> Unit = {},
+    onFeed: () -> Unit = {},
+    onPlaylists: () -> Unit = {},
+    onNotifications: () -> Unit = {},
+    onMessaging: () -> Unit = {},
+    onUploadHistory: () -> Unit = {},
+    onLeaderboard: () -> Unit = {}
+) {
     val email = viewModel.currentUserEmail ?: "Unknown"
     var userSongs by remember { mutableStateOf<List<Song>>(emptyList()) }
     LaunchedEffect(Unit) {
@@ -924,46 +988,74 @@ fun ProfileScreen(viewModel: PlayerViewModel, onBack: () -> Unit, onGoPremium: (
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AvantGradient)
+            .background(TrueBlack)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Profile", style = MaterialTheme.typography.displayLarge, color = NeonPink)
+            Text("Profile", style = MaterialTheme.typography.displayLarge, color = HighContrastWhite)
             if (viewModel.isPremium) {
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("★ Premium", color = PremiumGold, style = MaterialTheme.typography.headlineMedium)
+                Text("★ Premium", color = HighContrastWhite, style = MaterialTheme.typography.headlineMedium)
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Email: $email", color = AcidYellow)
+        Text("Email: $email", color = HighContrastWhite)
         Spacer(modifier = Modifier.height(32.dp))
-        Text("Your Uploaded Songs:", color = NeonGreen, style = MaterialTheme.typography.headlineMedium)
+        Text("Your Uploaded Songs:", color = HighContrastWhite, style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(8.dp))
         userSongs.forEach { song ->
-            Text("- ${song.title}", color = NeonBlue)
+            Text("- ${song.title}", color = HighContrastWhite)
         }
         Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = DeepBlack)) {
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
             Text("Back")
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { viewModel.signOut() }, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)) {
+        Button(onClick = { viewModel.signOut() }, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
             Text("Sign Out")
         }
         Spacer(modifier = Modifier.height(16.dp))
         if (!viewModel.isPremium) {
-            Button(onClick = onGoPremium, colors = ButtonDefaults.buttonColors(containerColor = PremiumGold, contentColor = PremiumDark)) {
+            Button(onClick = onGoPremium, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
                 Text("Go Premium")
             }
+            Spacer(modifier = Modifier.height(16.dp))
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onSettings, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = DeepBlack)) {
+        Button(onClick = onSettings, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
             Text("Settings")
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onDistributeMusic, colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = HighContrastWhite)) {
+        Button(onClick = onDistributeMusic, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
             Text("Distribute Your Music")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onDiscover, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Discover")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onFeed, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Feed")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onPlaylists, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Playlists")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNotifications, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Notifications")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onMessaging, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Messaging")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onUploadHistory, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Upload History")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onLeaderboard, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Leaderboard")
         }
     }
 }
@@ -979,7 +1071,7 @@ fun FeedScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AvantGradient)
+            .background(TrueBlack)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -1129,9 +1221,9 @@ fun DistributeMusicScreen(onBack: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Distribute Your Music", style = MaterialTheme.typography.displayLarge, color = AccentBlue)
+            Text("Distribute Your Music", style = MaterialTheme.typography.displayLarge, color = TrueBlack)
             Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = { launcher.launch("audio/*") }, colors = ButtonDefaults.buttonColors(containerColor = AccentPurple, contentColor = HighContrastWhite)) {
+            Button(onClick = { launcher.launch("audio/*") }, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
                 Text("Select Song to Distribute")
             }
             selectedSongUri?.let {
@@ -1146,7 +1238,7 @@ fun DistributeMusicScreen(onBack: () -> Unit) {
             DistributorLink("CD Baby", "https://cdbaby.com/")
             DistributorLink("Amuse", "https://www.amuse.io/")
             Spacer(modifier = Modifier.height(32.dp))
-            Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = HighContrastWhite)) {
+            Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
                 Text("Back")
             }
         }
@@ -1160,7 +1252,373 @@ fun DistributorLink(name: String, url: String) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         context.startActivity(intent)
     }) {
-        Text(name, color = AccentBlue)
+        Text(name, color = TrueBlack)
+    }
+}
+
+@Composable
+fun ArtistProfileScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
+    var bio by remember { mutableStateOf(viewModel.artistBio ?: "") }
+    var links by remember { mutableStateOf(viewModel.artistLinks ?: "") }
+    var editing by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Artist Profile", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        if (editing) {
+            OutlinedTextField(
+                value = bio,
+                onValueChange = { bio = it },
+                label = { Text("Bio") },
+                singleLine = false,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = HighContrastWhite,
+                    unfocusedBorderColor = HighContrastWhite,
+                    cursorColor = HighContrastWhite
+                ),
+                textStyle = LocalTextStyle.current.copy(color = HighContrastWhite)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = links,
+                onValueChange = { links = it },
+                label = { Text("Links (comma separated)") },
+                singleLine = false,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = HighContrastWhite,
+                    unfocusedBorderColor = HighContrastWhite,
+                    cursorColor = HighContrastWhite
+                ),
+                textStyle = LocalTextStyle.current.copy(color = HighContrastWhite)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = {
+                viewModel.artistBio = bio
+                viewModel.artistLinks = links
+                editing = false
+            }, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+                Text("Save")
+            }
+        } else {
+            Text("Bio: $bio", color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Links: $links", color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = { editing = true }, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+                Text("Edit Profile")
+            }
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun SongAnalyticsScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
+    val analytics = viewModel.songAnalytics
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Song Analytics", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        analytics.forEach { (song, data) ->
+            Text("${song.title} - Plays: ${data.plays}, Likes: ${data.likes}, Shares: ${data.shares}", color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun DiscoverScreen(onBack: () -> Unit) {
+    val trendingSongs = listOf(
+        Song("101", "Blackout", "DJ Mono", "", ""),
+        Song("102", "Night Drive", "Synth Noir", "", ""),
+        Song("103", "Shadow Beat", "Darkwave", "", "")
+    )
+    var search by remember { mutableStateOf("") }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Discover", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = search,
+            onValueChange = { search = it },
+            label = { Text("Search songs or artists") },
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = HighContrastWhite,
+                unfocusedBorderColor = HighContrastWhite,
+                cursorColor = HighContrastWhite
+            ),
+            textStyle = LocalTextStyle.current.copy(color = HighContrastWhite)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Trending Songs:", color = HighContrastWhite)
+        trendingSongs.filter { it.title.contains(search, true) || it.artist.contains(search, true) }.forEach { song ->
+            Text("${song.title} by ${song.artist}", color = HighContrastWhite)
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun FeedScreen(onBack: () -> Unit) {
+    val feedItems = listOf(
+        "DJ Mono uploaded 'Blackout'",
+        "Synth Noir liked 'Shadow Beat'",
+        "Darkwave commented on 'Night Drive'"
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Feed", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        feedItems.forEach { item ->
+            Text(item, color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun PlaylistsScreen(onBack: () -> Unit) {
+    val playlists = listOf(
+        "Night Vibes",
+        "Workout Mix",
+        "Chill Sessions"
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Playlists", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        playlists.forEach { name ->
+            Text(name, color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun NotificationsScreen(onBack: () -> Unit) {
+    val notifications = listOf(
+        "You have a new follower!",
+        "Your song 'Blackout' got 10 new plays.",
+        "Synth Noir commented on your song."
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Notifications", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        notifications.forEach { note ->
+            Text(note, color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun MessagingScreen(onBack: () -> Unit) {
+    val messages = remember { mutableStateListOf<String>(
+        "DJ Mono: Hey, check out my new track!",
+        "You: Nice! I'll listen now.",
+        "Synth Noir: Anyone up for a collab?"
+    ) }
+    var newMessage by remember { mutableStateOf("") }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Messages", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        messages.forEach { msg ->
+            Text(msg, color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Row {
+            OutlinedTextField(
+                value = newMessage,
+                onValueChange = { newMessage = it },
+                label = { Text("Type a message") },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = HighContrastWhite,
+                    unfocusedBorderColor = HighContrastWhite,
+                    cursorColor = HighContrastWhite
+                ),
+                textStyle = LocalTextStyle.current.copy(color = HighContrastWhite),
+                modifier = Modifier.weight(1f)
+            )
+            Button(onClick = {
+                if (newMessage.isNotBlank()) {
+                    messages.add("You: $newMessage")
+                    newMessage = ""
+                }
+            }, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+                Text("Send")
+            }
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(onBack: () -> Unit) {
+    var username by remember { mutableStateOf("ProBeatUser") }
+    var email by remember { mutableStateOf("user@probeat.com") }
+    var darkMode by remember { mutableStateOf(true) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Settings", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = username,
+            onValueChange = { username = it },
+            label = { Text("Username") },
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = HighContrastWhite,
+                unfocusedBorderColor = HighContrastWhite,
+                cursorColor = HighContrastWhite
+            ),
+            textStyle = LocalTextStyle.current.copy(color = HighContrastWhite)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("Email") },
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = HighContrastWhite,
+                unfocusedBorderColor = HighContrastWhite,
+                cursorColor = HighContrastWhite
+            ),
+            textStyle = LocalTextStyle.current.copy(color = HighContrastWhite)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Dark Mode", color = HighContrastWhite)
+            Switch(checked = darkMode, onCheckedChange = { darkMode = it })
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun UploadHistoryScreen(onBack: () -> Unit) {
+    val uploads = listOf(
+        "Blackout",
+        "Night Drive",
+        "Shadow Beat"
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Upload History", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        uploads.forEach { song ->
+            Text(song, color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
+    }
+}
+
+@Composable
+fun LeaderboardScreen(onBack: () -> Unit) {
+    val leaders = listOf(
+        "DJ Mono - 1000 plays",
+        "Synth Noir - 900 plays",
+        "Darkwave - 850 plays"
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TrueBlack)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Leaderboard", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        leaders.forEach { entry ->
+            Text(entry, color = HighContrastWhite)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = TrueBlack, contentColor = HighContrastWhite)) {
+            Text("Back")
+        }
     }
 }
 
